@@ -8,6 +8,9 @@ require 'uri'
 require 'rgl/adjacency'
 
 class SiteMapper
+  attr_reader :site
+  attr_reader :sitemap
+
   def initialize(site)
     @site = URI::parse(site).normalize
     @sitemap = RGL::DirectedAdjacencyGraph.new
@@ -28,6 +31,7 @@ class SiteMapper
       visited << s
       unvisited.delete s
     end
+    @sitemap
   end
 
   def parse_page(page)
@@ -49,4 +53,3 @@ class SiteMapper
   end
 
 end
-
