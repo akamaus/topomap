@@ -77,6 +77,7 @@ class SiteMapper
         end
         is_page_link = if @sitemap.has_vertex? site_t then true # старые ссылки можно не прозванивать
                        else
+                         puts "requesing head " + t.to_s
                          cont = @http.request_head(site_t.location).header.content_type
                          queries = queries + 1
                          if cont == "text/html" || cont == "text/xml" then true
@@ -108,7 +109,7 @@ class SiteMapper
 
     doc.search('a').each { |a|
       begin
-        u = URI::parse(a['href'])
+        u = URI::parse(a['href']).normalize
         if u.relative? then
           u = @site.merge(u).normalize
         end
