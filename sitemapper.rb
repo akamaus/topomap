@@ -1,42 +1,98 @@
+# -*- coding: utf-8 -*-
 require 'rubygems'
 
-require 'open-uri'
 require 'hpricot'
 
 require 'uri'
+require 'net/http'
 
 require 'rgl/adjacency'
 
-class SiteMapper
-  attr_reader :site
-  attr_reader :sitemap
+class SiteUri
+  def initialize(site)
+    @path = site.path
+    @query = site.query
+  end
 
+  def ==(uri2)
+    @path == uri2.path && @query == uri2.query
+  end
+
+  def eql?(uri2)
+    self.class == uri2.class && self == uri2
+  end
+
+  def hash
+    self.location.hash
+  end
+
+  def location
+    if @query.nil? then
+      @path
+    else
+      @path + "?" + @query
+    end
+  end
+
+  attr_reader :path
+  attr_reader :query
+end
+
+class SiteMapper
   def initialize(site)
     @site = URI::parse(site).normalize
     @sitemap = RGL::DirectedAdjacencyGraph.new
+
+    @http = Net::HTTP.start(@site.host, @site.port)
   end
 
   def run
-    unvisited = Set[@site]
+    unvisited = Set[SiteUri.new(@site)]
     visited = Set[]
     until unvisited.empty?
       s = unvisited.first
-      puts "unvisited: #{unvisited.size} pages;  visiting #{s}"
-      links = parse_page(s)
+      puts "unvisited: #{unvisited.size} pages;  visiting #{s.location}"
+      res = @http.request_get(s.location)
+      case res
+      when Net::HTTPSuccess
+      else
+        throw "got response code #{res.code}"
+      end
+      links = parse_page(res.body)
       puts "found #{links.size} links"
+      queries = 0 # количество head запросов
+      # пробегаемся по ссылкам
       links.each { |t|
-        @sitemap.add_edge(s,t)
-        unvisited << t unless visited.include?(t) || (@site.host != t.host)
+        site_t = SiteUri.new(t)
+        if @site.host != t.host # наружу пока не ходим
+          next
+        end
+        is_page_link = if @sitemap.has_vertex? site_t then true # старые ссылки можно не прозванивать
+                       else
+                         cont = @http.request_head(site_t.location).header.content_type
+                         queries = queries + 1
+                         if cont == "text/html" || cont == "text/xml" then true
+                         else puts "strange content type"
+                           false
+                         end
+                       end
+
+        if is_page_link
+          @sitemap.add_edge(s,site_t)
+        end
+
+        unvisited << site_t unless visited.include? site_t
       }
+      puts "made #{queries} HEAD queries"
       visited << s
       unvisited.delete s
     end
     @sitemap
   end
 
-  def parse_page(page)
+  def parse_page(body)
     urls = []
-    doc = Hpricot(open(page))
+    doc = Hpricot(body)
 
     doc.search('a').each { |a|
       begin
@@ -52,4 +108,6 @@ class SiteMapper
     urls
   end
 
+  attr_reader :site
+  attr_reader :sitemap
 end
