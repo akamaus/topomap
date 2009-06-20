@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 require 'rubygems'
 
+require 'robots'
+
 require 'hpricot'
 
 require 'uri'
@@ -44,6 +46,8 @@ class SiteMapper
     @sitemap = RGL::DirectedAdjacencyGraph.new
 
     @http = Net::HTTP.start(@site.host, @site.port)
+
+    @robots = Robots.new "Yandex"
   end
 
   def run
@@ -61,10 +65,14 @@ class SiteMapper
       links = parse_page(res.body)
       puts "found #{links.size} links"
       queries = 0 # количество head запросов
+      added = 0
       # пробегаемся по ссылкам
       links.each { |t|
         site_t = SiteUri.new(t)
         if @site.host != t.host # наружу пока не ходим
+          next
+        end
+        if ! @robots.allowed?(t) # уважаем robots.txt
           next
         end
         is_page_link = if @sitemap.has_vertex? site_t then true # старые ссылки можно не прозванивать
@@ -81,9 +89,13 @@ class SiteMapper
           @sitemap.add_edge(s,site_t)
         end
 
-        unvisited << site_t unless visited.include? site_t
+        unless visited.include? site_t
+          if unvisited.add? site_t
+            added = added + 1
+          end
+        end
       }
-      puts "made #{queries} HEAD queries"
+      puts "made #{queries} HEAD queries; added #{added} vertices"
       visited << s
       unvisited.delete s
     end
