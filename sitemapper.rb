@@ -7,6 +7,7 @@ require 'hpricot'
 
 require 'uri'
 require 'net/http'
+require 'http_encoding_helper'
 
 require 'rgl/adjacency'
 
@@ -61,7 +62,7 @@ class MyHTTP
           if @http.nil?
             @http = Net::HTTP.start(@host,@port)
           end
-          res = @http.send(name, args)
+          res = @http.send(name, *args)
           break
         rescue StandardError,Timeout::Error  => err
           puts "Error occured: " + err.inspect + "; sleeping #{sleep_time}"
@@ -96,10 +97,13 @@ class SiteMapper
   def run
     unvisited = Set[SiteUri.new(@site)]
     visited = Set[]
+
+    headers={'Accept-Encoding' => 'gzip, deflate'}
+
     until unvisited.empty?
       s = unvisited.first
       puts "visited: #{visited.size}; unvisited: #{unvisited.size} pages;  visiting #{s.location}"
-      res = @http.try_request_get(s.location)
+      res = @http.try_request_get(s.location, headers)
       case res
       when Net::HTTPSuccess
       else
@@ -107,7 +111,7 @@ class SiteMapper
         visited << s
         unvisited.delete s
       end
-      links = parse_page(res.body)
+      links = parse_page(res.plain_body)
       puts "found #{links.size} links"
       queries = 0 # количество head запросов
       added = 0
