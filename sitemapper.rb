@@ -40,12 +40,55 @@ class SiteUri
   attr_reader :query
 end
 
+class MyHTTP
+  def initialize(host, port)
+    @host = host
+    @port = port
+
+    @http = nil
+  end
+
+  private
+
+  def MyHTTP.make_tries(name)
+    define_method("try_" + name) { |*args|
+      res = nil
+      sleep_time = 1
+      tries = 0;
+      while true:
+        begin
+          tries = tries + 1
+          if @http.nil?
+            @http = Net::HTTP.start(@host,@port)
+          end
+          res = @http.send(name, args)
+          break
+        rescue StandardError,Timeout::Error  => err
+          puts "Error occured: " + err.inspect + "; sleeping #{sleep_time}"
+          sleep sleep_time
+          sleep_time *= 2
+          @http = nil
+        end
+      end
+      if res.nil?
+        throw "several tries were unsuccessful"
+      else
+        res
+      end
+    }
+  end
+
+  make_tries("request_get")
+  make_tries("request_head")
+end
+
+
 class SiteMapper
   def initialize(site)
     @site = URI::parse(site).normalize
     @sitemap = RGL::DirectedAdjacencyGraph.new
 
-    @http = Net::HTTP.start(@site.host, @site.port)
+    @http = MyHTTP.new(@site.host, @site.port)
 
     @robots = Robots.new "Yandex"
   end
@@ -55,12 +98,14 @@ class SiteMapper
     visited = Set[]
     until unvisited.empty?
       s = unvisited.first
-      puts "unvisited: #{unvisited.size} pages;  visiting #{s.location}"
-      res = @http.request_get(s.location)
+      puts "visited: #{visited.size}; unvisited: #{unvisited.size} pages;  visiting #{s.location}"
+      res = @http.try_request_get(s.location)
       case res
       when Net::HTTPSuccess
       else
-        throw "got response code #{res.code}"
+        puts "got response code #{res.code}"
+        visited << s
+        unvisited.delete s
       end
       links = parse_page(res.body)
       puts "found #{links.size} links"
@@ -77,8 +122,7 @@ class SiteMapper
         end
         is_page_link = if @sitemap.has_vertex? site_t then true # старые ссылки можно не прозванивать
                        else
-                         puts "requesing head " + t.to_s
-                         cont = @http.request_head(site_t.location).header.content_type
+                         cont = @http.try_request_head(site_t.location).header.content_type
                          queries = queries + 1
                          if cont == "text/html" || cont == "text/xml" then true
                          else puts "strange content type"
