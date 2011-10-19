@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 require 'rubygems'
 
-require 'robots'
+require 'rainbow'
 
+require 'robots'
 require 'hpricot'
 
 require 'uri'
@@ -65,7 +66,7 @@ class MyHTTP
           res = @http.send(name, *args)
           break
         rescue StandardError,Timeout::Error  => err
-          puts "Error occured: " + err.inspect + "; sleeping #{sleep_time}"
+          puts (("Error occured: " + err.inspect + "; sleeping #{sleep_time}").color(:red))
           sleep sleep_time
           sleep_time *= 2
           @http = nil
@@ -107,7 +108,7 @@ class SiteMapper
       case res
       when Net::HTTPSuccess
       else
-        puts "got response code #{res.code}"
+        puts "got response code #{res.code}".color(:yellow)
         visited << s
         unvisited.delete s
       end
@@ -129,7 +130,7 @@ class SiteMapper
                          cont = @http.try_request_head(site_t.location).header.content_type
                          queries = queries + 1
                          if cont == "text/html" || cont == "text/xml" then true
-                         else puts "strange content type"
+                         else puts "strange content type: #{cont} on link #{site_t.location}".color(:red)
                            false
                          end
                        end
