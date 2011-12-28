@@ -103,7 +103,7 @@ class SiteMapper
 
     until unvisited.empty?
       s = unvisited.first
-      puts "visited: #{visited.size}; unvisited: #{unvisited.size} pages;  visiting #{s.location}"
+      puts "visited: #{visited.size}; unvisited: #{unvisited.size} pages; visiting #{s.location}"
       res = @http.try_request_get(s.location, headers)
       case res
       when Net::HTTPSuccess
@@ -127,24 +127,31 @@ class SiteMapper
         end
         is_page_link = if @sitemap.has_vertex? site_t then true # старые ссылки можно не прозванивать
                        else
-                         cont = @http.try_request_head(site_t.location).header.content_type
+                         res = @http.try_request_head(site_t.location)
+                         cont = res.header.content_type
                          queries = queries + 1
-                         if cont == "text/html" || cont == "text/xml" then true
-                         else puts "strange content type: #{cont} on link #{site_t.location}".color(:red)
+                         case res
+                         when Net::HTTPClientError then
+                           puts "Broken link: #{site_t.location} on page #{s.location}".color(:red)
                            false
+                         else
+                           if cont == "text/html" || cont == "text/xml" then true
+                           else puts "strange content type: #{cont} on link #{site_t.location}".color(:red)
+                             false
+                           end
                          end
                        end
 
         if is_page_link
           @sitemap.add_edge(s,site_t)
-        end
-
-        unless visited.include? site_t
-          if unvisited.add? site_t
-            added = added + 1
+          unless visited.include? site_t
+            if unvisited.add? site_t
+              added = added + 1
+            end
           end
         end
       }
+
       puts "made #{queries} HEAD queries; added #{added} vertices"
       visited << s
       unvisited.delete s

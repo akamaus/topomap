@@ -1,5 +1,7 @@
-require 'sitemapper'
 
+require 'rubygems'
+
+require 'sitemapper'
 require 'rgl/dot'
 
 
