@@ -38,6 +38,10 @@ class SiteUri
     end
   end
 
+  def to_s
+    self.location
+  end
+
   attr_reader :path
   attr_reader :query
 end
